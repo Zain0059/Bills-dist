@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>حاسبة توزيع الفواتير</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{font-family:Tahoma,Arial,sans-serif;background:#f0f4f8;margin:0;direction:rtl}
+h1{background:#1a3a5c;color:white;margin:0;padding:14px 24px;font-size:19px}
+h1 small{display:block;font-size:11px;font-weight:normal;opacity:.7;margin-top:2px}
+.topbar{background:#112d4a;padding:8px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid rgba(255,255,255,.1)}
+.tabs{background:white;display:flex;border-bottom:2px solid #ddd;padding:0 16px;position:sticky;top:0;z-index:99;gap:2px}
+.tab{padding:11px 18px;border:none;background:none;cursor:pointer;font-family:Tahoma;font-size:13px;color:#666;border-bottom:3px solid transparent;margin-bottom:-2px}
+.tab.on{color:#0d6e6e;border-bottom-color:#0d6e6e;font-weight:bold}
+.page{display:none;padding:20px;max-width:1400px;margin:auto}
+.page.on{display:block}
+.card{background:white;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.1);margin-bottom:20px;overflow:hidden}
+.card-head{background:#f5f7fa;border-bottom:1px solid #e0e0e0;padding:11px 18px;font-weight:bold;color:#1a3a5c;display:flex;align-items:center;justify-content:space-between}
+.card-body{padding:18px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+label{display:block;font-size:12px;color:#666;margin-bottom:5px}
+input[type=text],input[type=number]{width:100%;padding:8px 10px;border:1.5px solid #ccc;border-radius:6px;font-family:Tahoma;font-size:13px}
+input:focus{outline:none;border-color:#0d6e6e}
+.f1{flex:3 1 200px}.f2{flex:1 1 110px}
+.btn{padding:8px 18px;border:none;border-radius:6px;cursor:pointer;font-family:Tahoma;font-size:13px;font-weight:bold;transition:.15s}
+.btn-add{background:#1a3a5c;color:white}.btn-add:hover{background:#0d6e6e}
+.btn-save{background:#0d6e6e;color:white}.btn-save:hover{background:#0a5555}
+.btn-new{background:#e8f5e9;color:#166534;border:1.5px solid #86efac}.btn-new:hover{background:#dcfce7}
+.btn-del{background:#ffe4e4;color:#c00;font-size:12px;padding:4px 11px}
+.btn-pdf{background:#0d6e6e;color:white;padding:10px 28px;font-size:15px}
+.btn-load{background:#dbeafe;color:#1e40af;font-size:12px;padding:5px 13px;border:1px solid #93c5fd}
+.btn-del-inv{background:#fee2e2;color:#991b1b;font-size:12px;padding:5px 13px;border:1px solid #fca5a5}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#1a3a5c;color:white;padding:9px 10px;text-align:center;white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid #f0f0f0;text-align:center;white-space:nowrap}
+tr:nth-child(even) td{background:#fafafa}
+.tfoot-row td{background:#e8f5e9;font-weight:bold;border-top:2px solid #0d6e6e}
+.up-cell{color:#0d6e6e;font-weight:bold;font-size:14px}
+.empty{text-align:center;padding:50px;color:#999}
+.empty .ico{font-size:48px;margin-bottom:10px}
+.qty-in{width:65px;padding:4px;border:1.5px solid #ccc;border-radius:5px;text-align:center;font-family:Tahoma;font-size:12px}
+.qty-in:focus{outline:none;border-color:#0d6e6e}
+.total-th{background:#7f1d1d}.unit-th{background:#0a4f4f}
+.total-row td{background:#1a3a5c;color:#ffd700;font-weight:bold;font-size:13px;border:none}
+.sig-row{display:flex;justify-content:space-around;padding:28px 20px;border-top:1px solid #eee;flex-wrap:wrap;gap:20px}
+.sig-box{text-align:center}
+.sig-label{font-size:11px;color:#999;margin-bottom:36px}
+.sig-line{border-top:1.5px solid #1a3a5c;width:120px;margin:0 auto;padding-top:4px;font-size:11px;color:#1a3a5c}
+.grand-num{color:#ffd700;font-size:16px;font-weight:bold}
+.sb{font-size:12px;padding:4px 10px;border-radius:5px;font-weight:bold}
+.sb-ok{background:#dcfce7;color:#166534}
+.sb-err{background:#fee2e2;color:#991b1b}
+.sb-load{background:#fef9c3;color:#854d0e}
+.inv-row{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid #f0f0f0}
+.inv-row:last-child{border-bottom:none}
+.inv-row:hover{background:#f8fafc}
+.inv-info{flex:1;text-align:right}
+.inv-num{font-weight:bold;color:#1a3a5c;font-size:14px}
+.inv-meta{font-size:11px;color:#94a3b8;margin-top:3px}
+.inv-total{font-weight:bold;color:#0d6e6e;font-size:14px;min-width:110px;text-align:center}
+.badge-current{background:#ffd700;color:#1a3a5c;font-size:10px;font-weight:bold;padding:2px 8px;border-radius:10px;margin-right:6px}
+@media print{.tabs,.btn,.topbar{display:none!important}}
+.login-wrap{position:fixed;inset:0;background:linear-gradient(135deg,#0f2035 0%,#0d4f4f 100%);display:flex;align-items:center;justify-content:center;z-index:9999}
+.login-box{background:white;border-radius:16px;padding:40px 36px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.4);direction:rtl}
+.login-logo{text-align:center;margin-bottom:24px}
+.login-logo .ico{font-size:44px}
+.login-logo h2{font-size:18px;color:#1a3a5c;margin:8px 0 2px;font-weight:800}
+.login-logo small{font-size:11px;color:#94a3b8}
+.login-field{margin-bottom:16px}
+.login-field label{display:block;font-size:12px;color:#64748b;margin-bottom:5px;font-weight:bold}
+.login-field input{width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:Tahoma;font-size:14px;transition:.2s;direction:ltr}
+.login-field input:focus{outline:none;border-color:#0d6e6e;background:#f0fdfc}
+.login-btn{width:100%;padding:12px;background:linear-gradient(135deg,#1a3a5c,#0d6e6e);color:white;border:none;border-radius:8px;font-family:Tahoma;font-size:15px;font-weight:bold;cursor:pointer;margin-top:4px;transition:.2s}
+.login-btn:hover{opacity:.9}
+.login-btn:disabled{opacity:.6;cursor:not-allowed}
+.login-err{background:#fee2e2;color:#991b1b;padding:9px 12px;border-radius:8px;font-size:12px;margin-top:12px;text-align:center;display:none}
+.user-bar{font-size:11px;color:rgba(255,255,255,.7);margin-right:auto;display:flex;align-items:center;gap:8px}
+.logout-btn{background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.3);border-radius:5px;padding:3px 10px;font-family:Tahoma;font-size:11px;cursor:pointer}
+.logout-btn:hover{background:rgba(255,255,255,.25)}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div class="login-wrap" id="loginWrap">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="ico">🦷</div>
+      <h2>مخزن مستلزمات الأسنان</h2>
+      <small>الإدارة الصحية ببركة السبع</small>
+    </div>
+    <div class="login-field">
+      <label>البريد الإلكتروني</label>
+      <input type="email" id="loginEmail" placeholder="example@email.com" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="login-field">
+      <label>كلمة المرور</label>
+      <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">تسجيل الدخول</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<h1>حاسبة توزيع الفواتير <small>الإدارة الصحية ببركة السبع — مخزن مستلزمات الأسنان</small></h1>
+
+<div class="topbar">
+  <label style="color:rgba(255,255,255,.8);font-size:12px;white-space:nowrap;margin:0">رقم الفاتورة:</label>
+  <input type="text" id="invoiceNum" placeholder="مثال: T35/UPA/2023" oninput="updateInvoiceDisplay()"
+    style="padding:6px 10px;border:1.5px solid rgba(255,255,255,.35);border-radius:6px;background:rgba(255,255,255,.1);
+    color:white;font-family:Tahoma;font-size:13px;font-weight:bold;width:200px;direction:ltr;margin:0">
+  <button class="btn btn-save" onclick="saveInvoice()" id="saveBtn">💾 حفظ</button>
+  <button class="btn btn-new" onclick="newInvoice()">➕ فاتورة جديدة</button>
+  <span id="statusBar" class="sb" style="display:none"></span>
+  <span id="editingLabel" style="font-size:11px;color:rgba(255,215,0,.8);margin-right:4px"></span>
+  <div class="user-bar" id="userBar" style="display:none">
+    <span id="userEmail"></span>
+    <button class="logout-btn" onclick="doLogout()">خروج</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab on" id="tab-t1" onclick="showTab('t1',this)">📦 إدخال الأصناف</button>
+  <button class="tab" id="tab-t2" onclick="showTab('t2',this)">📊 جدول التوزيع</button>
+  <button class="tab" id="tab-t3" onclick="showTab('t3',this)">🧾 ملخص الفاتورة</button>
+  <button class="tab" id="tab-t4" onclick="showTab('t4',this)">🗂️ الفواتير المحفوظة</button>
+</div>
+
+<!-- TAB 1 -->
+<div id="t1" class="page on">
+  <div class="card">
+    <div class="card-head">➕ إضافة صنف جديد</div>
+    <div class="card-body">
+      <div class="row">
+        <div class="f1"><label>اسم الصنف</label><input type="text" id="iName" placeholder="مثال: NANO HYBRID COMPOSITE" onkeydown="if(event.key=='Enter')addItem()"></div>
+        <div class="f2"><label>الكمية الإجمالية</label><input type="number" id="iQty" placeholder="0" min="0" onkeydown="if(event.key=='Enter')addItem()"></div>
+        <div class="f2"><label>السعر الإجمالي (جنيه)</label><input type="number" id="iPrice" placeholder="0.00" min="0" step="0.01" onkeydown="if(event.key=='Enter')addItem()"></div>
+        <div><label>&nbsp;</label><button class="btn btn-add" onclick="addItem()">+ إضافة</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="card" id="itemsCard">
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>#</th><th style="text-align:right;min-width:220px">اسم الصنف</th>
+          <th>الكمية الإجمالية</th><th>السعر الإجمالي (جنيه)</th>
+          <th class="unit-th">سعر الوحدة (جنيه)</th><th>حذف</th>
+        </tr></thead>
+        <tbody id="itemsTbody"></tbody>
+        <tfoot id="itemsTfoot"></tfoot>
+      </table>
+    </div>
+  </div>
+  <div id="itemsEmpty" class="empty"><div class="ico">📦</div><div>لا توجد أصناف — أضف من النموذج أعلاه</div></div>
+</div>
+
+<!-- TAB 2 -->
+<div id="t2" class="page">
+  <div class="card" id="distCard"><div style="overflow-x:auto"><table id="distTable"></table></div></div>
+  <div id="distEmpty" class="empty"><div class="ico">📊</div><div>أضف أصنافاً أولاً من التبويب الأول</div></div>
+</div>
+
+<!-- TAB 3 -->
+<div id="t3" class="page">
+  <div class="card" style="max-width:660px;margin:0 auto">
+    <div style="background:linear-gradient(135deg,#1a3a5c,#0d6e6e);color:white;padding:18px 24px">
+      <div style="font-size:12px;opacity:.75">الإدارة الصحية ببركة السبع — مخزن مستلزمات الأسنان</div>
+      <div style="font-size:20px;font-weight:bold;margin-top:4px">المبالغ المطلوبة من الوحدات</div>
+      <div style="font-size:12px;margin-top:4px;display:flex;gap:18px;flex-wrap:wrap">
+        <span>إجمالي الفاتورة: <span class="grand-num" id="summaryGrandTop">0.00</span> جنيه</span>
+        <span id="summaryInvoiceNum" style="color:#ffd700;font-weight:bold"></span>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%">
+        <thead><tr>
+          <th>#</th><th style="text-align:right;padding:9px 18px">الوحدة الصحية</th>
+          <th class="unit-th">الإجمالي (جنيه)</th>
+        </tr></thead>
+        <tbody id="summaryTbody"></tbody>
+        <tfoot id="summaryTfoot"></tfoot>
+      </table>
+    </div>
+    <div class="sig-row">
+      <div class="sig-box"><div class="sig-label">توقيع مسؤول المخزن</div><div class="sig-line">التوقيع والختم</div></div>
+      <div class="sig-box"><div class="sig-label">توقيع مدير الإدارة</div><div class="sig-line">التوقيع والختم</div></div>
+      <div class="sig-box"><div class="sig-label">اعتماد المسؤول المالي</div><div class="sig-line">التوقيع والختم</div></div>
+    </div>
+    <div style="padding:0 20px 18px;text-align:center">
+      <button class="btn btn-pdf" onclick="exportPDF()" id="pdfBtn">⬇️ تصدير PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 4 -->
+<div id="t4" class="page">
+  <div class="card">
+    <div class="card-head">
+      <span>🗂️ الفواتير المحفوظة</span>
+      <button class="btn btn-save" onclick="loadInvoicesList()" style="font-size:12px;padding:5px 14px">🔄 تحديث</button>
+    </div>
+    <div id="savedList"><div class="empty"><div class="ico">⏳</div><div>جاري التحميل...</div></div></div>
+  </div>
+</div>
+
+<div id="pdfContent" style="display:none;position:fixed;top:0;right:0;width:794px;background:white;padding:32px;direction:rtl;font-family:Tahoma,Arial,sans-serif;z-index:9999;box-sizing:border-box"></div>
+
+<script>
+var SB_URL='https://kaxgvwzqzifcwpjmrrxj.supabase.co';
+var SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtheGd2d3pxemlmY3dwam1ycnhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MjgzNzIsImV4cCI6MjA4OTMwNDM3Mn0.qZ5XQWEAVogLwIV5fxXyfpZVP2Vgdz1oHzOVi1CZlNo';
+var sb=supabase.createClient(SB_URL,SB_KEY);
+
+var CLINICS=["شنتنا الحجر","الشهيد فكري","الروضة","أبو مشهور","ميت فارس","كفر هورين","جنزور","كفر نفرة","طوخ طنبشا","طنبشا","الدبايبة","كفر هلال","المركز الصحي"];
+var items=[], dist={}, idSeed=1, currentInvoiceId=null;
+
+function f2(n){return (+(n||0)).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+function unitPrice(it){return it.qty>0?it.price/it.qty:0;}
+function clinicCost(it,ci){return unitPrice(it)*((dist[it.id]&&dist[it.id][ci])||0);}
+function clinicTotal(ci){return items.reduce(function(s,it){return s+clinicCost(it,ci);},0);}
+function grandTotal(){return CLINICS.reduce(function(s,_,ci){return s+clinicTotal(ci);},0);}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function showStatus(msg,type,persist){
+  var el=document.getElementById('statusBar');
+  el.textContent=msg; el.className='sb sb-'+type; el.style.display='inline-block';
+  if(!persist) setTimeout(function(){el.style.display='none';},3000);
+}
+
+function updateCurrentIdDisplay(){
+  var el=document.getElementById('editingLabel');
+  var btn=document.getElementById('saveBtn');
+  if(currentInvoiceId){el.textContent='✏️ تعديل فاتورة محفوظة';btn.textContent='💾 حفظ التعديلات';}
+  else{el.textContent='';btn.textContent='💾 حفظ';}
+}
+
+function showTab(id,btn){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on');});
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  document.getElementById(id).classList.add('on'); btn.classList.add('on');
+  if(id==='t2') renderDist();
+  if(id==='t3') renderSummary();
+  if(id==='t4') loadInvoicesList();
+}
+
+function addItem(){
+  var name=document.getElementById('iName').value.trim();
+  var qty=parseFloat(document.getElementById('iQty').value)||0;
+  var price=parseFloat(document.getElementById('iPrice').value)||0;
+  if(!name){alert('الرجاء إدخال اسم الصنف');document.getElementById('iName').focus();return;}
+  var id='i'+(idSeed++);
+  items.push({id:id,name:name,qty:qty,price:price}); dist[id]={};
+  document.getElementById('iName').value=''; document.getElementById('iQty').value=''; document.getElementById('iPrice').value='';
+  document.getElementById('iName').focus(); renderItems();
+}
+
+function delItem(id){items=items.filter(function(it){return it.id!==id;});delete dist[id];renderItems();}
+
+function updateField(id,key,val){
+  var it=items.find(function(x){return x.id===id;});
+  if(!it) return;
+  if(key==='name') it.name=val; else it[key]=parseFloat(val)||0;
+  renderItems();
+}
+
+function setQty(itemId,ci,val){
+  if(!dist[itemId]) dist[itemId]={};
+  dist[itemId][ci]=parseFloat(val)||0;
+  renderDistPrices(); renderSummaryLite();
+}
+
+function renderItems(){
+  var tbody=document.getElementById('itemsTbody'),tfoot=document.getElementById('itemsTfoot');
+  var card=document.getElementById('itemsCard'),empty=document.getElementById('itemsEmpty');
+  if(items.length===0){card.style.display='none';empty.style.display='block';return;}
+  card.style.display='block';empty.style.display='none';
+  var html='',totQty=0,totPrice=0;
+  items.forEach(function(it,i){
+    totQty+=it.qty;totPrice+=it.price;
+    html+='<tr><td style="color:#999;font-size:12px">'+(i+1)+'</td>'
+      +'<td style="text-align:right"><input type="text" value="'+esc(it.name)+'" onchange="updateField(\''+it.id+'\',\'name\',this.value)" style="width:100%;min-width:200px;border:1px solid #ddd;border-radius:5px;padding:4px 8px;font-family:Tahoma;font-size:13px;background:transparent"></td>'
+      +'<td><input type="number" value="'+it.qty+'" onchange="updateField(\''+it.id+'\',\'qty\',this.value)" style="width:85px;padding:4px;border:1px solid #ddd;border-radius:5px;text-align:center;font-family:Tahoma;font-size:13px;background:transparent"></td>'
+      +'<td><input type="number" value="'+it.price+'" onchange="updateField(\''+it.id+'\',\'price\',this.value)" style="width:120px;padding:4px;border:1px solid #ddd;border-radius:5px;text-align:center;font-family:Tahoma;font-size:13px;background:transparent"></td>'
+      +'<td class="up-cell">'+f2(unitPrice(it))+'</td>'
+      +'<td><button class="btn btn-del" onclick="delItem(\''+it.id+'\')">حذف</button></td></tr>';
+  });
+  tbody.innerHTML=html;
+  tfoot.innerHTML='<tr class="tfoot-row"><td colspan="2" style="text-align:right;padding-right:16px">الإجمالي</td><td>'+totQty+'</td><td>'+f2(totPrice)+'</td><td class="up-cell">—</td><td></td></tr>';
+}
+
+function renderDist(){
+  var card=document.getElementById('distCard'),empty=document.getElementById('distEmpty');
+  if(items.length===0){card.style.display='none';empty.style.display='block';return;}
+  card.style.display='block';empty.style.display='none';
+  var tbl=document.getElementById('distTable');
+  var thead='<thead><tr><th style="position:sticky;right:0;min-width:180px;text-align:right;padding:9px 12px">الصنف</th><th class="unit-th" style="min-width:90px">سعر الوحدة</th>';
+  CLINICS.forEach(function(c){thead+='<th style="min-width:90px">'+c+'</th>';});
+  thead+='<th class="total-th" style="min-width:100px">جمع التوزيع</th></tr></thead>';
+  var tbody='<tbody>';
+  items.forEach(function(it,i){
+    var up=unitPrice(it),bg=i%2===0?'#f0f7ff':'#f0fff4',bg2=i%2===0?'white':'#fafff7';
+    tbody+='<tr style="background:'+bg+'">'
+      +'<td style="position:sticky;right:0;background:'+(i%2===0?'#dbeafe':'#dcfce7')+';text-align:right;padding:5px 10px;font-weight:bold;font-size:12px">'+esc(it.name)+'<br><span style="font-size:10px;color:#888;font-weight:normal">الكمية ←</span></td>'
+      +'<td style="background:'+(i%2===0?'#bfdbfe':'#bbf7d0')+';font-weight:bold;color:#0a4f4f">'+f2(up)+'</td>';
+    CLINICS.forEach(function(_,ci){
+      var v=dist[it.id]&&dist[it.id][ci]?dist[it.id][ci]:'';
+      tbody+='<td style="padding:3px 4px"><input class="qty-in" type="number" min="0" value="'+v+'" oninput="setQty(\''+it.id+'\','+ci+',this.value)"></td>';
+    });
+    tbody+='<td id="qs-'+it.id+'" style="font-weight:bold;color:#999">—</td></tr>';
+    tbody+='<tr style="background:'+bg2+'">'
+      +'<td style="position:sticky;right:0;background:'+(i%2===0?'#f8fafc':'#f0fdf4')+';font-size:10px;color:#999;text-align:right;padding:3px 10px">السعر (جنيه) ←</td>'
+      +'<td style="font-size:10px;color:#999">—</td>';
+    CLINICS.forEach(function(_,ci){
+      var cost=clinicCost(it,ci);
+      tbody+='<td id="dp-'+it.id+'-'+ci+'" style="color:'+(cost>0?'#0d6e6e':'#ddd')+';font-weight:'+(cost>0?'bold':'normal')+';font-size:11px;padding:4px 5px">'+(cost>0?f2(cost):'·')+'</td>';
+    });
+    tbody+='<td id="ps-'+it.id+'" style="color:#7f1d1d;font-weight:bold;font-size:12px;background:#fff7f7">'+f2(0)+'</td></tr>';
+  });
+  tbody+='<tr class="total-row"><td style="position:sticky;right:0;background:#1a3a5c;text-align:center;font-size:14px;padding:11px 12px" colspan="2">إجمالي كل وحدة</td>';
+  CLINICS.forEach(function(_,ci){var t=clinicTotal(ci);tbody+='<td id="ct-'+ci+'" style="color:'+(t>0?'#ffd700':'rgba(255,255,255,.4)')+'">'+(t>0?f2(t):'—')+'</td>';});
+  tbody+='<td id="gt" style="color:#ffd700">'+f2(grandTotal())+'</td></tr></tbody>';
+  tbl.innerHTML=thead+tbody; renderDistPrices();
+}
+
+function renderDistPrices(){
+  items.forEach(function(it){
+    var qSum=0,pSum=0;
+    CLINICS.forEach(function(_,ci){
+      var q=(dist[it.id]&&dist[it.id][ci])||0,cost=clinicCost(it,ci);
+      qSum+=q;pSum+=cost;
+      var dp=document.getElementById('dp-'+it.id+'-'+ci);
+      if(dp){dp.textContent=cost>0?f2(cost):'·';dp.style.color=cost>0?'#0d6e6e':'#ddd';dp.style.fontWeight=cost>0?'bold':'normal';}
+    });
+    var qs=document.getElementById('qs-'+it.id),ps=document.getElementById('ps-'+it.id);
+    if(qs){
+      qs.textContent=qSum||'—';
+      if(qSum===0){qs.style.color='#999';qs.style.background='';}
+      else if(qSum===it.qty){qs.style.color='#166534';qs.style.background='#dcfce7';}
+      else{qs.style.color='#991b1b';qs.style.background='#fee2e2';}
+    }
+    if(ps) ps.textContent=f2(pSum);
+  });
+  CLINICS.forEach(function(_,ci){
+    var ct=document.getElementById('ct-'+ci),t=clinicTotal(ci);
+    if(ct){ct.textContent=t>0?f2(t):'—';ct.style.color=t>0?'#ffd700':'rgba(255,255,255,.4)';}
+  });
+  var gt=document.getElementById('gt');if(gt) gt.textContent=f2(grandTotal());
+  renderSummaryLite();
+}
+
+function renderSummary(){
+  var grand=grandTotal();
+  document.getElementById('summaryGrandTop').textContent=f2(grand);
+  var html='';
+  CLINICS.forEach(function(clinic,ci){
+    var t=clinicTotal(ci),pct=grand>0?(t/grand*100):0;
+    html+='<tr style="background:'+(ci%2===0?'white':'#f8f8f8')+'">'
+      +'<td style="color:#999;font-size:12px">'+(ci+1)+'</td>'
+      +'<td style="text-align:right;padding:9px 18px"><div style="font-weight:bold;margin-bottom:4px">'+clinic+'</div>'
+      +'<div style="height:4px;background:#eee;border-radius:2px"><div style="height:100%;background:linear-gradient(90deg,#0d6e6e,#22d3ee);width:'+pct+'%;border-radius:2px"></div></div></td>'
+      +'<td id="sc-'+ci+'" style="font-weight:bold;font-size:15px;color:'+(t>0?'#0d6e6e':'#ccc')+'">'+f2(t)+'</td></tr>';
+  });
+  document.getElementById('summaryTbody').innerHTML=html;
+  document.getElementById('summaryTfoot').innerHTML='<tr style="background:#1a3a5c"><td colspan="2" style="color:white;font-weight:bold;font-size:16px;padding:13px 18px;text-align:center">الإجمالي العام</td><td style="background:#0d6e6e;color:#ffd700;font-size:18px;font-weight:bold">'+f2(grand)+'</td></tr>';
+}
+
+function renderSummaryLite(){
+  var grand=grandTotal();
+  var el=document.getElementById('summaryGrandTop');if(el) el.textContent=f2(grand);
+  CLINICS.forEach(function(_,ci){var sc=document.getElementById('sc-'+ci);if(sc){var t=clinicTotal(ci);sc.textContent=f2(t);sc.style.color=t>0?'#0d6e6e':'#ccc';}});
+  var sf=document.getElementById('summaryTfoot');
+  if(sf) sf.innerHTML='<tr style="background:#1a3a5c"><td colspan="2" style="color:white;font-weight:bold;font-size:16px;padding:13px 18px;text-align:center">الإجمالي العام</td><td style="background:#0d6e6e;color:#ffd700;font-size:18px;font-weight:bold">'+f2(grandTotal())+'</td></tr>';
+}
+
+function updateInvoiceDisplay(){
+  var num=document.getElementById('invoiceNum').value.trim();
+  var snum=document.getElementById('summaryInvoiceNum');
+  if(snum) snum.textContent=num?'رقم الفاتورة: '+num:'';
+}
+
+// ═══════════════════════════════════════
+// SUPABASE
+// ═══════════════════════════════════════
+async function saveInvoice(){
+  var invNum=document.getElementById('invoiceNum').value.trim();
+  if(!invNum){alert('الرجاء إدخال رقم الفاتورة أولاً');document.getElementById('invoiceNum').focus();return;}
+  if(items.length===0){alert('لا توجد أصناف للحفظ');return;}
+  document.getElementById('saveBtn').disabled=true;
+  showStatus('⏳ جاري الحفظ...','load',true);
+  var payload={invoice_number:invNum,items:items,dist:dist,updated_at:new Date().toISOString()};
+  try{
+    var res;
+    if(currentInvoiceId){
+      res=await sb.from('invoices').update(payload).eq('id',currentInvoiceId).select().single();
+    } else {
+      res=await sb.from('invoices').insert(payload).select().single();
+    }
+    if(res.error) throw res.error;
+    currentInvoiceId=res.data.id;
+    updateCurrentIdDisplay();
+    showStatus('✅ تم الحفظ','ok');
+  } catch(e){showStatus('❌ '+e.message,'err',true);}
+  document.getElementById('saveBtn').disabled=false;
+}
+
+async function loadInvoicesList(){
+  var listEl=document.getElementById('savedList');
+  listEl.innerHTML='<div class="empty"><div class="ico">⏳</div><div>جاري التحميل...</div></div>';
+  try{
+    var res=await sb.from('invoices').select('id,invoice_number,items,dist,created_at,updated_at').order('updated_at',{ascending:false});
+    if(res.error) throw res.error;
+    var rows=res.data;
+    if(!rows.length){listEl.innerHTML='<div class="empty"><div class="ico">🗂️</div><div>لا توجد فواتير محفوظة بعد</div></div>';return;}
+    var html='';
+    rows.forEach(function(row){
+      // calc grand total for this invoice
+      var g=0;
+      if(row.items&&row.dist){
+        for(var ci=0;ci<13;ci++){
+          row.items.forEach(function(it){
+            var up=it.qty>0?it.price/it.qty:0;
+            g+=up*((row.dist[it.id]&&row.dist[it.id][ci])||0);
+          });
+        }
+      }
+      var dt=new Date(row.updated_at).toLocaleDateString('ar-EG',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      var isCurrent=currentInvoiceId===row.id;
+      html+='<div class="inv-row">'
+        +'<div class="inv-info">'
+        +'<div class="inv-num">'+(isCurrent?'<span class="badge-current">محدد</span>':'')+esc(row.invoice_number||'—')+'</div>'
+        +'<div class="inv-meta">آخر تحديث: '+dt+' &nbsp;|&nbsp; '+(row.items?row.items.length:0)+' صنف</div>'
+        +'</div>'
+        +'<div class="inv-total">'+f2(g)+' ج</div>'
+        +'<button class="btn btn-load" onclick="loadInvoice(\''+row.id+'\')">📂 فتح</button>'
+        +'<button class="btn btn-del-inv" onclick="deleteInvoice(\''+row.id+'\',\''+esc(row.invoice_number||'')+'\')">🗑️ حذف</button>'
+        +'</div>';
+    });
+    listEl.innerHTML=html;
+  } catch(e){listEl.innerHTML='<div class="empty"><div class="ico">❌</div><div>خطأ: '+esc(e.message)+'</div></div>';}
+}
+
+async function loadInvoice(id){
+  showStatus('⏳ جاري الفتح...','load',true);
+  try{
+    var res=await sb.from('invoices').select('*').eq('id',id).single();
+    if(res.error) throw res.error;
+    var row=res.data;
+    items=row.items||[]; dist=row.dist||{}; currentInvoiceId=row.id;
+    var maxSeed=0;
+    items.forEach(function(it){var n=parseInt((it.id||'').replace('i',''))||0;if(n>maxSeed)maxSeed=n;});
+    idSeed=maxSeed+1;
+    document.getElementById('invoiceNum').value=row.invoice_number||'';
+    updateInvoiceDisplay(); updateCurrentIdDisplay();
+    showTab('t1',document.getElementById('tab-t1'));
+    renderItems();
+    showStatus('✅ تم فتح الفاتورة','ok');
+  } catch(e){showStatus('❌ '+e.message,'err',true);}
+}
+
+async function deleteInvoice(id,name){
+  if(!confirm('حذف الفاتورة:\n'+name+'\n\nهل أنت متأكد؟')) return;
+  showStatus('⏳ جاري الحذف...','load',true);
+  try{
+    var res=await sb.from('invoices').delete().eq('id',id);
+    if(res.error) throw res.error;
+    if(currentInvoiceId===id) newInvoice();
+    showStatus('✅ تم الحذف','ok');
+    loadInvoicesList();
+  } catch(e){showStatus('❌ '+e.message,'err',true);}
+}
+
+function newInvoice(){
+  if(items.length>0&&!confirm('إنشاء فاتورة جديدة؟\nسيتم مسح البيانات الحالية غير المحفوظة')) return;
+  items=[];dist={};idSeed=1;currentInvoiceId=null;
+  document.getElementById('invoiceNum').value='';
+  updateInvoiceDisplay();updateCurrentIdDisplay();
+  renderItems();
+  showTab('t1',document.getElementById('tab-t1'));
+  showStatus('✅ فاتورة جديدة','ok');
+}
+
+// ── PDF ──
+function buildDistPageHTML(invoiceNum, today, clinicStart, clinicEnd, pageLabel){
+  var slicedClinics=CLINICS.slice(clinicStart, clinicEnd);
+  var html='';
+  html+='<div style="background:linear-gradient(135deg,#1a3a5c,#0d6e6e);color:white;padding:10px 16px;border-radius:8px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">';
+  html+='<div><div style="font-size:10px;opacity:.75">الإدارة الصحية ببركة السبع — مخزن مستلزمات الأسنان</div>';
+  html+='<div style="font-size:15px;font-weight:bold;margin-top:2px">جدول توزيع المستلزمات — '+pageLabel+'</div></div>';
+  html+='<div style="text-align:center"><div style="font-size:10px;opacity:.75">رقم الفاتورة</div><div style="font-size:13px;font-weight:bold;color:#ffd700">'+(invoiceNum||'—')+'</div></div></div>';
+  html+='<table style="border-collapse:collapse;font-size:9.5px;width:100%">';
+  html+='<thead><tr>';
+  html+='<th style="background:#1a3a5c;color:white;padding:7px 10px;text-align:right;min-width:160px;white-space:normal">الصنف</th>';
+  html+='<th style="background:#0a4f4f;color:white;padding:7px 6px;min-width:65px">سعر الوحدة</th>';
+  slicedClinics.forEach(function(c){ html+='<th style="background:#1a3a5c;color:white;padding:6px 4px;min-width:80px;font-size:9px">'+c+'</th>'; });
+  html+='<th style="background:#7f1d1d;color:white;padding:7px 6px;min-width:65px">جمع التوزيع</th>';
+  html+='<th style="background:#374151;color:white;padding:7px 6px;min-width:75px">سعر الصنف</th>';
+  html+='</tr></thead><tbody>';
+  items.forEach(function(it,i){
+    var up=unitPrice(it);
+    var bg=i%2===0?'white':'#f5f9ff';
+    var qSumAll=0,pSum=0;
+    CLINICS.forEach(function(_,ci){ qSumAll+=(dist[it.id]&&dist[it.id][ci])||0; pSum+=clinicCost(it,ci); });
+    var qMatch=qSumAll===it.qty;
+    html+='<tr style="background:'+bg+'">';
+    html+='<td style="padding:5px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:bold;white-space:normal;line-height:1.4">'+esc(it.name)+'</td>';
+    html+='<td style="padding:5px;border-bottom:1px solid #eee;text-align:center;color:#0a4f4f;font-weight:bold">'+f2(up)+'</td>';
+    slicedClinics.forEach(function(_,j){
+      var ci=clinicStart+j;
+      var q=(dist[it.id]&&dist[it.id][ci])||0;
+      var cost=clinicCost(it,ci);
+      html+='<td style="padding:4px 3px;border-bottom:1px solid #eee;text-align:center">';
+      html+='<div style="font-weight:bold;font-size:11px;color:#1a3a5c">'+(q||'—')+'</div>';
+      html+='<div style="font-size:8px;color:'+(cost>0?'#0d6e6e':'#ccc')+';margin-top:1px">'+(cost>0?f2(cost):'')+'</div>';
+      html+='</td>';
+    });
+    html+='<td style="padding:5px;border-bottom:1px solid #eee;text-align:center;font-weight:bold;font-size:12px;background:'+(qMatch?'#dcfce7':'#fee2e2')+';color:'+(qMatch?'#166534':'#991b1b')+'">'+qSumAll+'</td>';
+    html+='<td style="padding:5px;border-bottom:1px solid #eee;text-align:center;font-weight:bold;color:#7f1d1d">'+f2(pSum)+'</td>';
+    html+='</tr>';
+  });
+  html+='<tr style="background:#1a3a5c">';
+  html+='<td colspan="2" style="padding:8px;color:white;font-weight:bold;text-align:center;font-size:11px">إجمالي كل وحدة</td>';
+  var grandSum=0;
+  slicedClinics.forEach(function(_,j){
+    var ci=clinicStart+j; var t=clinicTotal(ci); grandSum+=t;
+    html+='<td style="padding:7px 4px;text-align:center;color:#ffd700;font-weight:bold;font-size:9px">'+f2(t)+'</td>';
+  });
+  html+='<td style="padding:7px;text-align:center;color:#ffd700;font-weight:bold">—</td>';
+  html+='<td style="padding:7px;text-align:center;color:#ffd700;font-weight:bold;background:#0d6e6e">'+f2(grandSum)+'</td>';
+  html+='</tr></tbody></table>';
+  html+='<div style="text-align:center;margin-top:10px;font-size:9px;color:#bbb">'+today+'</div>';
+  return html;
+}
+
+function canvasToPages(canvas, doc, margin, isLandscape){
+  var PW=isLandscape?297:210, PH=isLandscape?210:297;
+  var contentW=PW-margin*2, pageH=PH-margin*2;
+  var imgH=canvas.height*contentW/canvas.width;
+  if(imgH<=pageH){
+    doc.addImage(canvas.toDataURL('image/jpeg',0.95),'JPEG',margin,margin,contentW,imgH);
+  } else {
+    var pxPerMm=canvas.width/contentW;
+    var phpx=Math.floor(pageH*pxPerMm);
+    var total=Math.ceil(canvas.height/phpx);
+    var pc=document.createElement('canvas');
+    pc.width=canvas.width; pc.height=phpx;
+    var ctx=pc.getContext('2d');
+    for(var pg=0;pg<total;pg++){
+      ctx.fillStyle='#fff'; ctx.fillRect(0,0,pc.width,pc.height);
+      ctx.drawImage(canvas,0,-pg*phpx);
+      if(pg>0) doc.addPage(isLandscape?'landscape':'portrait');
+      doc.addImage(pc.toDataURL('image/jpeg',0.95),'JPEG',margin,margin,contentW,pageH);
+    }
+  }
+}
+
+function exportPDF(){
+  var btn=document.getElementById('pdfBtn');
+  btn.textContent='⏳ جاري التصدير...'; btn.disabled=true;
+  var grand=grandTotal(), today=new Date().toLocaleDateString('ar-EG');
+  var invoiceNum=document.getElementById('invoiceNum').value.trim();
+  var container=document.getElementById('pdfContent');
+
+  // ── Page 1 HTML: Summary ──
+  var html1='';
+  html1+='<div style="background:linear-gradient(135deg,#1a3a5c,#0d6e6e);color:white;padding:18px 22px;border-radius:8px;margin-bottom:18px">';
+  html1+='<div style="font-size:11px;opacity:.75;margin-bottom:3px">الإدارة الصحية ببركة السبع — مخزن مستلزمات الأسنان</div>';
+  html1+='<div style="font-size:20px;font-weight:bold">المبالغ المطلوبة من الوحدات عن الفاتورة</div>';
+  if(invoiceNum) html1+='<div style="font-size:13px;margin-top:5px;color:#ffd700;font-weight:bold">رقم الفاتورة: '+invoiceNum+'</div>';
+  html1+='<div style="font-size:12px;margin-top:4px">الإجمالي العام: <span style="color:#ffd700;font-size:15px;font-weight:bold">'+f2(grand)+' جنيه</span></div></div>';
+  html1+='<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:18px"><thead><tr>';
+  html1+='<th style="background:#1a3a5c;color:white;padding:9px 10px;width:40px;text-align:center">م</th>';
+  html1+='<th style="background:#1a3a5c;color:white;padding:9px 14px;text-align:right">الوحدة الصحية</th>';
+  html1+='<th style="background:#0d6e6e;color:white;padding:9px 10px;width:150px;text-align:center">الإجمالي (جنيه)</th>';
+  html1+='</tr></thead><tbody>';
+  CLINICS.forEach(function(clinic,ci){
+    var t=clinicTotal(ci);
+    html1+='<tr style="background:'+(ci%2===0?'white':'#f8f8f8')+'">'
+      +'<td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center;color:#999">'+(ci+1)+'</td>'
+      +'<td style="padding:8px 14px;border-bottom:1px solid #eee;text-align:right;font-weight:bold">'+clinic+'</td>'
+      +'<td style="padding:8px;border-bottom:1px solid #eee;text-align:center;font-weight:bold;font-size:14px;color:'+(t>0?'#0d6e6e':'#bbb')+'">'+f2(t)+'</td></tr>';
+  });
+  html1+='<tr style="background:#1a3a5c"><td colspan="2" style="padding:10px 14px;color:white;font-weight:bold;font-size:14px;text-align:center">الإجمالي العام</td><td style="padding:10px;background:#0d6e6e;color:#ffd700;font-weight:bold;font-size:16px;text-align:center">'+f2(grand)+'</td></tr></tbody></table>';
+  html1+='<div style="display:flex;justify-content:space-around;margin-top:28px;padding-top:18px;border-top:1px solid #ddd">';
+  ['توقيع مسؤول المخزن','توقيع مدير الإدارة'].forEach(function(sig){
+    html1+='<div style="text-align:center"><div style="font-size:10px;color:#888;margin-bottom:36px">'+sig+'</div><div style="border-top:1.5px solid #1a3a5c;width:120px;margin:0 auto;padding-top:4px;font-size:10px;color:#1a3a5c">التوقيع والختم</div></div>';
+  });
+  html1+='</div><div style="text-align:center;margin-top:16px;font-size:10px;color:#bbb">'+today+'</div>';
+
+  // ── Render Page 1 (portrait 794px) ──
+  container.innerHTML=html1;
+  container.style.width='794px';
+  container.style.display='block';
+
+  setTimeout(function(){
+    html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',width:794,windowWidth:794}).then(function(canvas1){
+      container.style.display='none';
+
+      // ── Page 2: Distribution part 1 (clinics 0-6) ──
+      var html2=buildDistPageHTML(invoiceNum,today,0,7,'الجزء الأول — الوحدات ١ إلى ٧');
+      container.innerHTML=html2;
+      container.style.width='1123px';
+      container.style.display='block';
+
+      setTimeout(function(){
+        html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',width:1123,windowWidth:1123}).then(function(canvas2){
+          container.style.display='none';
+
+          // ── Page 3: Distribution part 2 (clinics 7-12) ──
+          var html3=buildDistPageHTML(invoiceNum,today,7,13,'الجزء الثاني — الوحدات ٨ إلى ١٣');
+          container.innerHTML=html3;
+          container.style.width='1123px';
+          container.style.display='block';
+
+          setTimeout(function(){
+            html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',width:1123,windowWidth:1123}).then(function(canvas3){
+              container.style.display='none';
+              container.style.width='794px';
+
+              // ── Build PDF ──
+              var doc=new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+              var margin=8;
+              canvasToPages(canvas1,doc,margin,false);         // Page 1 portrait
+              doc.addPage('a4','landscape');
+              canvasToPages(canvas2,doc,margin,true);          // Page 2 landscape
+              doc.addPage('a4','landscape');
+              canvasToPages(canvas3,doc,margin,true);          // Page 3 landscape
+
+              doc.save('فاتورة_'+(invoiceNum||'توزيع')+'.pdf');
+              btn.textContent='⬇️ تصدير PDF'; btn.disabled=false;
+            }).catch(function(e){
+              alert('خطأ في الصفحة الثالثة: '+e.message);
+              container.style.display='none'; container.style.width='794px';
+              btn.textContent='⬇️ تصدير PDF'; btn.disabled=false;
+            });
+          },150);
+        }).catch(function(e){
+          alert('خطأ في الصفحة الثانية: '+e.message);
+          container.style.display='none'; container.style.width='794px';
+          btn.textContent='⬇️ تصدير PDF'; btn.disabled=false;
+        });
+      },150);
+    }).catch(function(e){
+      alert('خطأ: '+e.message); container.style.display='none';
+      btn.textContent='⬇️ تصدير PDF'; btn.disabled=false;
+    });
+  },150);
+}
+
+// ═══════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════
+async function doLogin(){
+  var btn=document.getElementById('loginBtn');
+  var email=document.getElementById('loginEmail').value.trim();
+  var pass=document.getElementById('loginPass').value;
+  var errEl=document.getElementById('loginErr');
+  if(!email||!pass){errEl.textContent='الرجاء إدخال البريد وكلمة المرور';errEl.style.display='block';return;}
+  btn.disabled=true; btn.textContent='⏳ جاري الدخول...'; errEl.style.display='none';
+  try{
+    var res=await sb.auth.signInWithPassword({email:email,password:pass});
+    if(res.error) throw res.error;
+    onLoginSuccess(res.data.user);
+  } catch(e){
+    errEl.textContent='❌ '+( e.message==='Invalid login credentials'?'بريد إلكتروني أو كلمة مرور خاطئة':e.message);
+    errEl.style.display='block';
+    btn.disabled=false; btn.textContent='تسجيل الدخول';
+  }
+}
+
+function onLoginSuccess(user){
+  document.getElementById('loginWrap').style.display='none';
+  document.getElementById('userEmail').textContent='👤 '+user.email;
+  document.getElementById('userBar').style.display='flex';
+  document.getElementById('loginBtn').disabled=false;
+  document.getElementById('loginBtn').textContent='تسجيل الدخول';
+  renderItems();
+  updateCurrentIdDisplay();
+}
+
+async function doLogout(){
+  if(!confirm('تسجيل الخروج؟')) return;
+  await sb.auth.signOut();
+  document.getElementById('loginWrap').style.display='flex';
+  document.getElementById('userBar').style.display='none';
+  document.getElementById('loginEmail').value='';
+  document.getElementById('loginPass').value='';
+  document.getElementById('loginErr').style.display='none';
+  // Reset state
+  items=[];dist={};idSeed=1;currentInvoiceId=null;
+  renderItems();
+}
+
+// Check existing session on load
+(async function(){
+  var res=await sb.auth.getSession();
+  if(res.data&&res.data.session&&res.data.session.user){
+    onLoginSuccess(res.data.session.user);
+  }
+  // else login screen stays visible
+})();
+</script>
+</body>
+</html>
